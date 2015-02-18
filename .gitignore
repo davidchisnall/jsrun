@@ -1,0 +1,9 @@
+*.sw?
+*~
+*.out
+*.BAK
+*.so
+*.o
+generated.c
+ffigen
+jsrun

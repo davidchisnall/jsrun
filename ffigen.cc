@@ -30,6 +30,7 @@
 #include <clang-c/Index.h>
 #include <stdio.h>
 #include <cassert>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -86,6 +87,24 @@ class RAIICXString
 	~RAIICXString() { clang_disposeString(cxstr); }
 };
 
+typedef std::function<CXChildVisitResult(CXCursor, CXCursor)> Visitor;
+
+static CXChildVisitResult
+visitChildrenLamdaTrampoline(CXCursor cursor,
+                             CXCursor parent,
+                             CXClientData client_data)
+{
+	return (*reinterpret_cast<Visitor*>(client_data))(cursor, parent);
+}
+
+static unsigned
+visitChildren(CXCursor cursor, Visitor v)
+{
+	return clang_visitChildren(cursor, visitChildrenLamdaTrampoline,
+			(CXClientData*)&v);
+}
+
+
 static enum CXChildVisitResult
 printTree(CXCursor cursor, CXCursor parent, CXClientData depth)
 {
@@ -108,19 +127,18 @@ collectStruct(CXCursor structDecl)
 	{
 		return;
 	}
-	__block Struct &s = structs[structname];
-	clang_visitChildrenWithBlock(structDecl,
-		^enum CXChildVisitResult(CXCursor cursor, CXCursor parent)
+	Struct &s = structs[structname];
+	visitChildren(structDecl,
+		[&](CXCursor cursor, CXCursor parent)
 		{
 			CXCursorKind kind = clang_getCursorKind(cursor);
 			RAIICXString str = clang_getCursorKindSpelling(kind);
 			RAIICXString name = clang_getCursorSpelling(cursor);
-			__block CXType type =
-				clang_getCanonicalType(clang_getCursorType(cursor));
+			CXType type = clang_getCanonicalType(clang_getCursorType(cursor));
 			if (type.kind == CXType_Unexposed)
 			{
-				clang_visitChildrenWithBlock(cursor, 
-					^enum CXChildVisitResult(CXCursor cursor, CXCursor parent)
+				visitChildren(cursor, 
+					[&](CXCursor cursor, CXCursor parent)
 					{
 						type = clang_getCanonicalType(clang_getCursorType(cursor));
 						return CXChildVisit_Break;
@@ -150,9 +168,9 @@ static void
 collectEnum(CXCursor enumDecl)
 {
 	RAIICXString name = clang_getCursorSpelling(enumDecl);
-	__block Enum &e = enums[name];
-	clang_visitChildrenWithBlock(enumDecl,
-		^enum CXChildVisitResult(CXCursor cursor, CXCursor parent)
+	Enum &e = enums[name];
+	visitChildren(enumDecl,
+		[&](CXCursor cursor, CXCursor parent)
 		{
 			RAIICXString name = clang_getCursorSpelling(cursor);
 			int value = clang_getEnumConstantDeclValue(cursor);

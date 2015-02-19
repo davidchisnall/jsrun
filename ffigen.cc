@@ -138,15 +138,6 @@ collectStruct(CXCursor structDecl)
 			RAIICXString str = clang_getCursorKindSpelling(kind);
 			RAIICXString name = clang_getCursorSpelling(cursor);
 			CXType type = clang_getCanonicalType(clang_getCursorType(cursor));
-			if (type.kind == CXType_Unexposed)
-			{
-				visitChildren(cursor, 
-					[&](CXCursor cursor, CXCursor parent)
-					{
-						type = clang_getCanonicalType(clang_getCursorType(cursor));
-						return CXChildVisit_Break;
-					});
-			}
 			RAIICXString type_name = clang_getTypeSpelling(type);
 			if (type.kind == CXType_Record)
 			{

@@ -550,8 +550,10 @@ emit_function_wrappers()
 			RAIICXString typeName = clang_getTypeSpelling(argType);
 			if (argType.kind == CXType_Pointer)
 			{
-				CXType pointee =
-					clang_getCanonicalType(clang_getPointeeType(argType));
+				CXType pointee = clang_getPointeeType(argType);
+				RAIICXString str = clang_getTypeSpelling(pointee);
+				bool isConst = clang_isConstQualifiedType(pointee);
+				pointee = clang_getCanonicalType(pointee);
 				if (pointee.kind == CXType_Char_S ||
 				    pointee.kind == CXType_Void)
 				{
@@ -571,10 +573,13 @@ emit_function_wrappers()
 				          isCompleteRecordType(pointee))
 				{
 					special = true;
-					writeback.insert(i);
+					if (!isConst)
+					{
+						writeback.insert(i);
+						cout << "int writeback_" << argName << " = 0;\n";
+					}
 					RAIICXString pointeeName = clang_getTypeSpelling(pointee);
 					RAIICXString pointeeKind = clang_getTypeKindSpelling(pointee.kind);
-					cout << "int writeback_" << argName << " = 0;\n";
 					cout << typeName << ' ' << argName << ";\n";
 					std::string bufName = argName + "_buf";
 					cout << pointeeName << ' ' << bufName << ";\n";
@@ -582,7 +587,10 @@ emit_function_wrappers()
 					cout << "\telse\n\t{\n";
 					cast_from_js(pointee, bufName);
 					cout << argName << " = &" << bufName << ";\n";
-					cout << "writeback_" << argName << " = 1;\n";
+					if (!isConst)
+					{
+						cout << "writeback_" << argName << " = 1;\n";
+					}
 					cout << "\t}";
 				}
 			}

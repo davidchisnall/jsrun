@@ -74,13 +74,30 @@ static std::unordered_map<std::string, Enum> enums;
  */
 class RAIICXString
 {
+	/**
+	 * The string that this wraps.
+	 */
 	CXString cxstr;
 	public:
+	/**
+	 * Construct from a libclang string.
+	 */
 	RAIICXString(CXString string) : cxstr(string) {}
-	const char *c_str() { return clang_getCString(cxstr); }
-	std::string str() { std::string s(c_str()); return s; }
-	operator const char *() { return c_str(); }
-	operator std::string() { std::string s(c_str()); return s; }
+	/**
+	 * Extract the C string from this string when cast to a C string.
+	 */
+	operator const char *() { return clang_getCString(cxstr); }
+	/**
+	 * Extract the C string from this string and convert it to a `std::string`.
+	 */
+	std::string str() { return std::string(clang_getCString(cxstr)); }
+	/**
+	 * Allow casts to a `std::string`.
+	 */
+	operator std::string() { return str(); }
+	/**
+	 * Destroy the underlying string.
+	 */
 	~RAIICXString() { clang_disposeString(cxstr); }
 };
 

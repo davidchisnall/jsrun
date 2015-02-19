@@ -388,6 +388,7 @@ main(int argc, char **argv)
 	if (argc < 2)
 	{
 		fprintf(stderr, "usage: %s {header} [compiler flags]\n", argv[0]);
+		return EXIT_FAILURE;
 	}
 	std::vector<const char*> args;
 	args.insert(args.end(), argv+2, argv+argc);

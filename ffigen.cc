@@ -103,9 +103,9 @@ class RAIICXString
 
 
 static CXChildVisitResult
-visitChildrenLamdaTrampoline(CXCursor cursor,
-                             CXCursor parent,
-                             CXClientData client_data)
+visitChildrenTrampoline(CXCursor cursor,
+                        CXCursor parent,
+                        CXClientData client_data)
 {
 	return (*reinterpret_cast<Visitor*>(client_data))(cursor, parent);
 }
@@ -113,7 +113,7 @@ visitChildrenLamdaTrampoline(CXCursor cursor,
 static unsigned
 visitChildren(CXCursor cursor, Visitor v)
 {
-	return clang_visitChildren(cursor, visitChildrenLamdaTrampoline,
+	return clang_visitChildren(cursor, visitChildrenTrampoline,
 			(CXClientData*)&v);
 }
 

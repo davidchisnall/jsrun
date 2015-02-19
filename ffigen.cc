@@ -41,12 +41,32 @@
 using std::cout;
 using std::cerr;
 
+/**
+ * Type for metadata about structs.  We collect the names and types of fields
+ * for each struct.
+ */
 typedef std::vector<std::pair<std::string, CXType>> Struct;
-typedef std::function<CXChildVisitResult(CXCursor, CXCursor)> Visitor;
+/**
+ * Type for metadata about enums.  We collect the name and value for each enum
+ * value.
+ */
 typedef std::vector<std::pair<std::string, int>> Enum;
+/**
+ * Type for visitors passed to `visitChildren`.
+ */
+typedef std::function<CXChildVisitResult(CXCursor, CXCursor)> Visitor;
 
+/**
+ * Global collection of all of the structs that we've found.
+ */
 static std::unordered_map<std::string, Struct> structs;
+/**
+ * Global collection of all of the function declarations that we've found.
+ */
 static std::unordered_map<std::string, CXType> functions;
+/**
+ * Global collection of all of the enumerations that we've found.
+ */
 static std::unordered_map<std::string, Enum> enums;
 
 /**

@@ -223,7 +223,14 @@ cast_to_js(CXType type, const std::string &cname)
 	switch (type.kind)
 	{
 		default:
-			return false;
+		{
+			RAIICXString typeName = clang_getTypeSpelling(type);
+			cerr << "Warning: Unable to handle type " << typeName << '\n';
+			ret = false;
+			break;
+		}
+		case CXType_Void:
+			break;
 		case CXType_Bool...CXType_LongLong:
 			cout << "\tduk_push_int(ctx, "<< cname << ");\n";
 			break;
@@ -320,7 +327,14 @@ cast_from_js(CXType type, const std::string &cname)
 	switch (type.kind)
 	{
 		default:
-			return false;
+		{
+			RAIICXString typeName = clang_getTypeSpelling(type);
+			cerr << "Warning: Unable to handle type " << typeName << '\n';
+			ret = false;
+			break;
+		}
+		case CXType_Void:
+			break;
 		// If the target is an integer type, then try to fetch it as an int.
 		case CXType_Bool...CXType_LongLong:
 			get_if("number", "int", "long long", cname);

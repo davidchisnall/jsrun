@@ -390,11 +390,9 @@ main(int argc, char **argv)
 		fprintf(stderr, "usage: %s {header} [compiler flags]\n", argv[0]);
 		return EXIT_FAILURE;
 	}
-	std::vector<const char*> args;
-	args.insert(args.end(), argv+2, argv+argc);
 	idx = clang_createIndex(1, 1);
 	translationUnit = clang_createTranslationUnitFromSourceFile(idx, argv[1],
-			args.size(), args.data(), 0, nullptr);
+			argc-2, argv+2, 0, nullptr);
 	clang_visitChildren(clang_getTranslationUnitCursor(translationUnit),
 			visitTranslationUnit, 0);
 	// First emit prototypes

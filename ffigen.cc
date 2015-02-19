@@ -28,7 +28,6 @@
  */
 
 #include <clang-c/Index.h>
-#include <stdio.h>
 #include <cassert>
 #include <functional>
 #include <iostream>
@@ -98,16 +97,6 @@ visitChildren(CXCursor cursor, Visitor v)
 {
 	return clang_visitChildren(cursor, visitChildrenLamdaTrampoline,
 			(CXClientData*)&v);
-}
-
-
-static enum CXChildVisitResult
-printTree(CXCursor cursor, CXCursor parent, CXClientData depth)
-{
-	CXCursorKind kind = clang_getCursorKind(cursor);
-	RAIICXString str = clang_getCursorKindSpelling(kind);
-	fprintf(stderr, "%s\n", str.c_str());
-	return CXChildVisit_Continue;
 }
 
 static void
@@ -247,6 +236,7 @@ cast_to_js(CXType type, const std::string &cname, const std::string &jsname)
 				     << ");\n\t}";
 				break;
 			}
+			// If it's a struct, then construct an object that corresponds to it.
 			RAIICXString typeName = clang_getCursorSpelling(decl);
 			cout << '\t';
 			cast_to_js_fn(cout, typeName);
@@ -286,6 +276,14 @@ cast_to_js(CXType type, const std::string &cname, const std::string &jsname)
 	return ret;
 }
 
+/**
+ * Helper function that emits code to that gets the top Duktape stack object as
+ * `getType` if it is `ifType` and casts it to `cast` before storing it in
+ * `ctype`.
+ *
+ * The `ifType` and `getType` parameters can differ, for example, if you wish
+ * to check that the top value is a number and get it as an int or a double.
+ */
 static void
 get_if(const char *ifType, const char *getType, const char *cast, const
 		std::string cname)
@@ -295,12 +293,19 @@ get_if(const char *ifType, const char *getType, const char *cast, const
 	     << "duk_get_" << getType << "(ctx, -1);\n"
 	     << "\t}\n";
 }
+/**
+ * Variant of `get_if` where `ifType` and `getType` are the same.
+ */
 static void
 get_if(const char *type, const char *cast, const std::string cname)
 {
 	return get_if(type, type, cast, cname);
 }
 
+/**
+ * Emit code to try to coerce the top item on the Duktape stack to `type` and
+ * store it in `cname`.
+ */
 bool
 cast_from_js(CXType type, const std::string &cname)
 {
@@ -309,17 +314,21 @@ cast_from_js(CXType type, const std::string &cname)
 	{
 		default:
 			return false;
+		// If the target is an integer type, then try to fetch it as an int.
 		case CXType_Bool...CXType_LongLong:
 			get_if("number", "int", "long long", cname);
 			break;
+		// If we want a floating point value, try to get it as a float.
 		case CXType_Float...CXType_LongDouble:
 			get_if("number", "double", cname);
 			break;
+		// Record types include structs and unions. 
 		case CXType_Record:
 		{
 			auto decl = clang_getTypeDeclaration(type);
-			// Skip unions for now - eventually we'll need to handle them
-			// sensibly.
+			// If it's a union, ust get the raw data as a buffer.
+			// FIXME: Once we have a TypedArray implementation, we'll want to
+			// construct one of those.
 			if (decl.kind == CXCursor_UnionDecl)
 			{
 					cout << "\tif (duk_is_buffer(ctx, -1))\n\t{\n"
@@ -334,6 +343,8 @@ cast_from_js(CXType type, const std::string &cname)
 					     << ", buf, size);\n\t}\n";
 				break;
 			}
+			// For struct types, call the function that we've already emitted
+			// (or are going to emit) that will perform the coercion.
 			RAIICXString type = clang_getCursorSpelling(decl);
 			cout << '\t';
 			cast_from_js_fn(cout, type);
@@ -342,6 +353,8 @@ cast_from_js(CXType type, const std::string &cname)
 		}
 		case CXType_ConstantArray:
 		{
+			// For constant sized arrays, try to read each element from an
+			// array parameter (or an object that looks a bit like an array).
 			CXType elementType = clang_getCanonicalType(clang_getElementType(type));
 			long long len = clang_getNumElements(type);
 			cout << "\tfor (int i=0 ; i<" << len << " ; i++)\n\t{\n";
@@ -353,6 +366,8 @@ cast_from_js(CXType type, const std::string &cname)
 			break;
 		}
 		case CXType_Pointer:
+			// If it's a pointer, just store it as a pointer.  It's up to the
+			// JS code to handle memory management correctly.
 			get_if("pointer", "void*", cname);
 			cout << "else if (duk_is_buffer(ctx, -1))\n\t{"
 			        "\tduk_size_t size;\n\t\t"
@@ -363,6 +378,9 @@ cast_from_js(CXType type, const std::string &cname)
 	return ret;
 }
 
+/**
+ * Returns true if the record type argument has some known fields.
+ */
 static bool
 isCompleteRecordType(CXType type)
 {
@@ -377,22 +395,9 @@ isCompleteRecordType(CXType type)
 	return !i->second.fields.empty();
 }
 
-
-int
-main(int argc, char **argv)
+void
+emit_struct_wrappers()
 {
-	if (argc < 2)
-	{
-		fprintf(stderr, "usage: %s {header} [compiler flags]\n", argv[0]);
-		return EXIT_FAILURE;
-	}
-	// Construct the libclang context and try to parse the 
-	CXIndex idx = clang_createIndex(1, 1);
-	CXTranslationUnit translationUnit =
-		clang_createTranslationUnitFromSourceFile(idx, argv[1], argc-2, argv+2,
-				0, nullptr);
-	clang_visitChildren(clang_getTranslationUnitCursor(translationUnit),
-			visitTranslationUnit, 0);
 	// First emit prototypes
 	for (auto &kv : structs)
 	{
@@ -469,6 +474,11 @@ main(int argc, char **argv)
 		}
 		cout << "}\n";
 	}
+}
+
+void
+emit_function_wrappers()
+{
 	// We'll try to emit a function wrapping each C function.  If we're not
 	// sure that we've managed, then we'll emit a warning and continue.  We'll
 	// then put all of the ones that we successfully handled in a function
@@ -630,6 +640,11 @@ main(int argc, char **argv)
 	}
 	cout << "\t{ 0, 0, 0 }\n";
 	cout << "};\n";
+}
+
+void
+emit_enum_wrappers()
+{
 	cout << "duk_ret_t dukopen_module(duk_context *ctx)\n{\n"
 	     << "\tduk_push_object(ctx);\n"
 	     << "\tduk_put_function_list(ctx, -1, js_funcs);\n";
@@ -652,7 +667,37 @@ main(int argc, char **argv)
 		}
 	}
 	cout << "\treturn 1;\n}\n";
+}
+
+int
+main(int argc, char **argv)
+{
+	if (argc < 2)
+	{
+		cerr << "Usage: " << argv[0] << "{header} [compiler flags]\n";
+		return EXIT_FAILURE;
+	}
+	// Construct the libclang context and try to parse the file.
+	CXIndex idx = clang_createIndex(1, 1);
+	CXTranslationUnit translationUnit =
+		clang_createTranslationUnitFromSourceFile(idx, argv[1], argc-2, argv+2,
+				0, nullptr);
+	if (!translationUnit)
+	{
+		cerr << "Unable to parse file\n";
+		return EXIT_FAILURE;
+	}
+	clang_visitChildren(clang_getTranslationUnitCursor(translationUnit),
+			visitTranslationUnit, 0);
+	// Emit all of the wrapers
+	emit_struct_wrappers();
+	emit_function_wrappers();
+	emit_enum_wrappers();
+	// Clean up (don't bother for non-debug builds, exit is our garbage
+	// collector!)
+#ifdef NDEBUG
 	clang_disposeTranslationUnit(translationUnit);
 	clang_disposeIndex(idx);
+#endif
 }
 

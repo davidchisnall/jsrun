@@ -216,8 +216,8 @@ void cast_from_js_fn(Stream &str, const std::string &name)
 	str << "js_function_" << name << "_from_js";
 }
 
-bool
-cast_to_js(CXType type, const std::string &cname, const std::string &jsname)
+static bool
+cast_to_js(CXType type, const std::string &cname)
 {
 	bool ret = true;
 	switch (type.kind)
@@ -258,7 +258,7 @@ cast_to_js(CXType type, const std::string &cname, const std::string &jsname)
 			cout << "\t{\n\tduk_idx_t arr_idx = duk_push_array(ctx);\n";
 			cout << "\tfor (int i=0 ; i<" << len << " ; i++)\n\t{\n";
 			std::string elName = std::string("(") + cname + ")[i]";
-			if (cast_to_js(elementType, elName, ""))
+			if (cast_to_js(elementType, elName))
 			{
 				cout << "\tduk_put_prop_index(ctx, arr_idx, i);\n";
 			}
@@ -445,7 +445,7 @@ emit_struct_wrappers()
 			}
 			std::string name = "obj->";
 			name += fname;
-			if (cast_to_js(ftype, name, fname))
+			if (cast_to_js(ftype, name))
 			{
 				cout << "\tduk_put_prop_string(ctx, -2, \"" << fname << "\");\n";
 			}
@@ -626,7 +626,7 @@ emit_function_wrappers()
 				cout << "(ctx, &(" << argName << "_buf), 0);\n";
 				cout << "\tduk_pop(ctx);\n\t}";
 			}
-			success &= cast_to_js(retTy, "ret", "");
+			success &= cast_to_js(retTy, "ret");
 		}
 		if (retTy.kind == CXType_Void)
 		{

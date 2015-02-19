@@ -390,10 +390,6 @@ main(int argc, char **argv)
 		fprintf(stderr, "usage: %s {header} [compiler flags]\n", argv[0]);
 	}
 	std::vector<const char*> args;
-	// Hacks because my libclang build doesn't have the correct set of header paths...
-	args.push_back("-I /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/6.0/include");
-	args.push_back("-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include");
-	args.push_back("-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/usr/include");
 	args.insert(args.end(), argv+2, argv+argc);
 	idx = clang_createIndex(1, 1);
 	translationUnit = clang_createTranslationUnitFromSourceFile(idx, argv[1],

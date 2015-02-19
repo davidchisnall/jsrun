@@ -468,7 +468,7 @@ int main(int argc, char *argv[]) {
 	 */
 
 	ctx = duk_create_heap_default();
-	init_modules(ctx);
+	init_default_objects(ctx);
 #if 0
 	duk_ncurses_register(ctx);
 	duk_socket_register(ctx);

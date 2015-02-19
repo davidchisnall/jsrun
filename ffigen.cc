@@ -42,6 +42,7 @@ using std::cout;
 using std::cerr;
 
 typedef std::vector<std::pair<std::string, CXType>> Struct;
+typedef std::function<CXChildVisitResult(CXCursor, CXCursor)> Visitor;
 typedef std::vector<std::pair<std::string, int>> Enum;
 
 static std::unordered_map<std::string, Struct> structs;
@@ -63,7 +64,6 @@ class RAIICXString
 	~RAIICXString() { clang_disposeString(cxstr); }
 };
 
-typedef std::function<CXChildVisitResult(CXCursor, CXCursor)> Visitor;
 
 static CXChildVisitResult
 visitChildrenLamdaTrampoline(CXCursor cursor,

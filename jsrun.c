@@ -65,10 +65,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #endif
-#include <sys/stat.h>
-#include <dlfcn.h>
 
-#include "duktape.h"
+#include "jsrun.h"
 
 #define  MEM_LIMIT_NORMAL   (128*1024*1024)   /* 128 MB */
 #define  MEM_LIMIT_HIGH     (2047*1024*1024)  /* ~2 GB */
@@ -412,91 +410,6 @@ int handle_interactive(duk_context *ctx) {
 }
 #endif  /* NO_READLINE */
 
-typedef duk_ret_t(*initfn)(duk_context*);
-
-static duk_ret_t read_file(duk_context *ctx) {
-	duk_idx_t top = duk_get_top(ctx);
-	if (top != 1)
-	{
-		return DUK_RET_TYPE_ERROR;
-	}
-	const char *fileName = duk_get_string(ctx, -1);
-	struct stat sb;
-	if (stat(fileName, &sb))
-	{
-		return 0;
-	}
-	FILE *f = fopen(fileName, "r");
-	if (!f)
-	{
-		return 0;
-	}
-	void *buffer = malloc(sb.st_size);
-	size_t len = fread(buffer, 1, sb.st_size, f);
-	duk_push_lstring(ctx, buffer, len);
-	free(buffer);
-	return 1;
-}
-
-static duk_ret_t load_native_module(duk_context *ctx) {
-	duk_idx_t top = duk_get_top(ctx);
-	if (top != 1)
-	{
-		return DUK_RET_TYPE_ERROR;
-	}
-	const char *file = duk_get_string(ctx, -1);
-	void *lib = dlopen(file, RTLD_LOCAL);
-	if (!lib)
-	{
-		return 0;
-	}
-	initfn init = (initfn)dlsym(lib, "dukopen_module");
-	if (init)
-	{
-		return init(ctx);
-	}
-	return 0;
-}
-
-const char modSearch[] =
-"Duktape.modSearch = function (id, require, exports, module) {\n"
-"    var name;\n"
-"    var src;\n"
-"    var found = false;\n"
-"\n"
-"    // FIXME: Should look at various default search paths.\n"
-"\n"
-"    // Try to load a native library\n"
-"    name = id + '.so';\n"
-"    var lib = Duktape.loadNativeModule(name);\n"
-"    if (!lib)\n"
-"    {\n"
-"       name = './' + id + '.so';\n"
-"       lib = Duktape.loadNativeModule(name);\n"
-"    }\n"
-"    if (lib)\n"
-"    {\n"
-"        for(var prop in lib) {\n"
-"            exports[prop] = lib[prop];\n"
-"        }\n"
-"        found = true;\n"
-"    }\n"
-"\n"
-"    // Try to load a JavaScript library\n"
-"    name = id + '.js';\n"
-"    src = Duktape.readFile(name);\n"
-"    if (typeof src === 'string')\n"
-"    {\n"
-"        found = true;\n"
-"    }\n"
-"\n"
-"    if (!found)\n"
-"    {\n"
-"        throw new Error('module not found: ' + id);\n"
-"    }\n"
-"    return src;\n"
-"}";
-
 
 int main(int argc, char *argv[]) {
 	duk_context *ctx = NULL;
@@ -555,15 +468,7 @@ int main(int argc, char *argv[]) {
 	 */
 
 	ctx = duk_create_heap_default();
-	duk_push_global_object(ctx);
-	duk_get_prop_string(ctx, -1, "Duktape");
-	duk_push_c_function(ctx, load_native_module, 1);
-	duk_put_prop_string(ctx, -2, "loadNativeModule");
-	duk_push_c_function(ctx, read_file, 1);
-	duk_put_prop_string(ctx, -2, "readFile");
-	duk_pop(ctx);
-	duk_pop(ctx);
-	duk_eval_string(ctx, modSearch);
+	init_modules(ctx);
 #if 0
 	duk_ncurses_register(ctx);
 	duk_socket_register(ctx);

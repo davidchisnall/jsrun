@@ -41,30 +41,11 @@
 using std::cout;
 using std::cerr;
 
-struct Field
-{
-	std::string name;
-	CXType type;
-};
-
-struct Struct
-{
-	std::vector<Field> fields;
-};
-
-struct Function
-{
-	std::string name;
-	CXType type;
-};
-
-struct Enum
-{
-	std::vector<std::pair<std::string, int>> values;
-};
+typedef std::vector<std::pair<std::string, CXType>> Struct;
+typedef std::vector<std::pair<std::string, int>> Enum;
 
 static std::unordered_map<std::string, Struct> structs;
-static std::unordered_map<std::string, Function> functions;
+static std::unordered_map<std::string, CXType> functions;
 static std::unordered_map<std::string, Enum> enums;
 
 /**
@@ -134,8 +115,7 @@ collectStruct(CXCursor structDecl)
 			{
 				collectStruct(clang_getTypeDeclaration(type));
 			}
-			Field f = { name, type };
-			s.fields.push_back(f);
+			s.push_back(std::make_pair(name.str(), type));
 			return CXChildVisit_Continue;
 	});
 }
@@ -145,8 +125,7 @@ collectFunction(CXCursor functionDecl)
 {
 	RAIICXString name = clang_getCursorSpelling(functionDecl);
 	CXType type = clang_getCanonicalType(clang_getCursorType(functionDecl));
-	Function &f = functions[name];
-	f.type = type;
+	functions[name] = type;
 }
 
 static void
@@ -159,7 +138,7 @@ collectEnum(CXCursor enumDecl)
 		{
 			RAIICXString name = clang_getCursorSpelling(cursor);
 			int value = clang_getEnumConstantDeclValue(cursor);
-			e.values.push_back(std::make_pair(name.str(), value));
+			e.push_back(std::make_pair(name.str(), value));
 			return CXChildVisit_Continue;
 		});
 
@@ -392,7 +371,7 @@ isCompleteRecordType(CXType type)
 	{
 		return false;
 	}
-	return !i->second.fields.empty();
+	return !i->second.empty();
 }
 
 void
@@ -417,7 +396,7 @@ emit_struct_wrappers()
 		auto &s = kv.second;
 		const std::string &sname = kv.first;
 		// If this is an empty / opaque struct, don't do anything with it...
-		if (s.fields.empty())
+		if (s.empty())
 		{
 			continue;
 		}
@@ -427,24 +406,26 @@ emit_struct_wrappers()
 		cout << "(duk_context *ctx, struct "
 		     << sname << " *obj, _Bool new_object) {\n"
 		        "\tif (new_object)\n\t{\n\t\tduk_push_object(ctx);\n\t}\n";
-		for (auto &f : s.fields)
+		for (auto &f : s)
 		{
+			std::string &fname = f.first;
+			CXType &ftype = f.second;
 			// Anonymous struct fields are assumed to be padding
-			if (f.name == "")
+			if (fname == "")
 			{
 				continue;
 			}
 			std::string name = "obj->";
-			name += f.name;
-			if (cast_to_js(f.type, name, f.name))
+			name += fname;
+			if (cast_to_js(ftype, name, fname))
 			{
-				cout << "\tduk_put_prop_string(ctx, -2, \"" << f.name << "\");\n";
+				cout << "\tduk_put_prop_string(ctx, -2, \"" << fname << "\");\n";
 			}
 			else
 			{
-				RAIICXString kind = clang_getTypeKindSpelling(f.type.kind);
+				RAIICXString kind = clang_getTypeKindSpelling(ftype.kind);
 				cerr << "Warning: Unhandled field " << sname << '.'
-					 << f.name << '\n';
+					 << fname << '\n';
 				cerr << "Type: " << kind << '\n';
 			}
 		}
@@ -456,20 +437,22 @@ emit_struct_wrappers()
 		cout << "(duk_context *ctx, struct " << sname << " *obj) {\n";
 		cout << "\tbzero(obj, sizeof(*obj));\n";
 		cout << "\tif (!duk_is_object(ctx, -1)) { return; }\n";
-		for (auto &f : s.fields)
+		for (auto &f : s)
 		{
+			std::string &fname = f.first;
+			CXType &ftype = f.second;
 			// Anonymous struct fields are assumed to be padding
-			if (f.name == "")
+			if (fname == "")
 			{
 				continue;
 			}
 			std::string name = "obj->";
-			name += f.name;
-			cout << "\tduk_push_string(ctx, \"" << f.name << "\");\n";
+			name += fname;
+			cout << "\tduk_push_string(ctx, \"" << fname << "\");\n";
 			cout << "\tif (duk_get_prop(ctx, -2)) {\n";
 			// No error reporting here, because we assume that we'll have
 			// already handled errors.
-			cast_from_js(f.type, name);
+			cast_from_js(ftype, name);
 			cout << "\t}\n\tduk_pop(ctx);\n";
 		}
 		cout << "}\n";
@@ -486,7 +469,7 @@ emit_function_wrappers()
 	std::vector<std::tuple<const std::string, const std::string, int>> fns;
 	for (auto kv : functions)
 	{
-		CXType fnType = kv.second.type;
+		CXType fnType = kv.second;
 		const std::string &name = kv.first;
 		// We don't have a way of constructing variadic calls at run time, so
 		// we can't bridge them automatically without linking in libffi or
@@ -656,7 +639,7 @@ emit_enum_wrappers()
 		{
 			cout << "\tduk_push_object(ctx);\n";
 		}
-		for (auto &v : vals.values)
+		for (auto &v : vals)
 		{
 			cout << "\tduk_push_int(ctx, " << v.second << ");\n"
 			     << "\tduk_put_prop_string(ctx, -2, \"" << v.first << "\");\n";

@@ -64,10 +64,6 @@ struct Enum
 	std::vector<std::pair<std::string, int>> values;
 };
 
-static CXIndex idx;
-static CXFile file;
-static CXTranslationUnit translationUnit;
-
 static std::unordered_map<std::string, Struct> structs;
 static std::unordered_map<std::string, Function> functions;
 static std::unordered_map<std::string, Enum> enums;
@@ -390,9 +386,11 @@ main(int argc, char **argv)
 		fprintf(stderr, "usage: %s {header} [compiler flags]\n", argv[0]);
 		return EXIT_FAILURE;
 	}
-	idx = clang_createIndex(1, 1);
-	translationUnit = clang_createTranslationUnitFromSourceFile(idx, argv[1],
-			argc-2, argv+2, 0, nullptr);
+	// Construct the libclang context and try to parse the 
+	CXIndex idx = clang_createIndex(1, 1);
+	CXTranslationUnit translationUnit =
+		clang_createTranslationUnitFromSourceFile(idx, argv[1], argc-2, argv+2,
+				0, nullptr);
 	clang_visitChildren(clang_getTranslationUnitCursor(translationUnit),
 			visitTranslationUnit, 0);
 	// First emit prototypes
@@ -654,5 +652,7 @@ main(int argc, char **argv)
 		}
 	}
 	cout << "\treturn 1;\n}\n";
+	clang_disposeTranslationUnit(translationUnit);
+	clang_disposeIndex(idx);
 }
 

@@ -544,6 +544,123 @@ emit_struct_wrappers()
 	}
 }
 
+template<class T> bool
+emit_function_argument(CXType fnType, int args, int i, T &writeback)
+{
+	bool success = true;
+	bool special = false;
+	std::stringstream ss;
+	ss << "arg" << i;
+	std::string argName = ss.str();
+	CXType argType = clang_getArgType(fnType, i);
+	cout << "\tduk_dup(ctx, -" << (args-i) << ");\n";
+	RAIICXString typeName = clang_getTypeSpelling(argType);
+	if (argType.kind == CXType_Pointer)
+	{
+		CXType pointee = clang_getPointeeType(argType);
+		RAIICXString str = clang_getTypeSpelling(pointee);
+		bool isConst = clang_isConstQualifiedType(pointee);
+		pointee = clang_getCanonicalType(pointee);
+		if (pointee.kind == CXType_Char_S ||
+		    pointee.kind == CXType_Void)
+		{
+			special = true;
+			cout << typeName << " arg" << i << ";\n";
+			get_if("string", "char*", argName);
+			cout << "\telse\n";
+			cast_from_js(argType, argName);
+		}
+		else if (pointee.kind == CXType_FunctionProto)
+		{
+			special = true;
+			success = false;
+			cerr << "Warning: Can't yet handle function pointer args\n";
+		}
+		else  if ((pointee.kind == CXType_Record) &&
+		          isCompleteRecordType(pointee))
+		{
+			special = true;
+			if (!isConst)
+			{
+				writeback.insert(i);
+				cout << "int writeback_" << argName << " = 0;\n";
+			}
+			RAIICXString pointeeName = clang_getTypeSpelling(pointee);
+			RAIICXString pointeeKind = clang_getTypeKindSpelling(pointee.kind);
+			cout << typeName << ' ' << argName << ";\n";
+			std::string bufName = argName + "_buf";
+			cout << pointeeName << ' ' << bufName << ";\n";
+			get_if("pointer", "void*", argName);
+			cout << "\telse\n\t{\n";
+			cast_from_js(pointee, bufName);
+			cout << argName << " = &" << bufName << ";\n";
+			if (!isConst)
+			{
+				cout << "writeback_" << argName << " = 1;\n";
+			}
+			cout << "\t}";
+		}
+	}
+	if (!special)
+	{
+		cout << typeName << " arg" << i << ";\n";
+		if (!cast_from_js(argType, argName))
+		{
+			success = false;
+		}
+	}
+	cout << "\tduk_pop(ctx);\n";
+	return success;
+}
+
+void
+emit_function_call(CXType fnType, CXType retTy, int args, const std::string &name)
+{
+	RAIICXString typeName = clang_getTypeSpelling(retTy);
+	if (retTy.kind != CXType_Void)
+	{
+		cout << typeName << " ret = ";
+	}
+	cout << name << '(';
+	for (int i=0 ; i<args ; i++)
+	{
+		// If we've created something that's a desugared type, emit a
+		// cast to the typedef type to silence compiler warnings.
+		RAIICXString argTy =
+			clang_getTypeSpelling(clang_getArgType(fnType, i));
+		cout << " arg" << i;
+		if (i<args-1)
+		{
+			cout << ", ";
+		}
+	}
+	cout << ");";
+}
+
+template<class T> void
+emit_function_arg_writeback(T writeback, CXType fnType, int args)
+{
+	// After the call, we iterate over all of the values that we should
+	// be writing back.
+	for (auto i : writeback)
+	{
+		CXType argType = clang_getArgType(fnType, i);
+		CXType type =
+			clang_getCanonicalType(clang_getPointeeType(argType));
+		auto decl = clang_getTypeDeclaration(type);
+		std::stringstream ss;
+		ss << "arg" << i;
+		std::string argName = ss.str();
+		RAIICXString typeName = clang_getCursorSpelling(decl);
+		cout << "\tif (writeback_" << argName << ")\n\t{\n";
+		cout << "\tduk_dup(ctx, -" << (args-i) << ");\n";
+		cout << '\t';
+		cast_to_js_fn(cout, typeName);
+		cout << "(ctx, &(" << argName << "_buf), 0);\n";
+		cout << "\tduk_pop(ctx);\n\t}";
+	}
+}
+
 void
 emit_function_wrappers()
 {
@@ -584,115 +701,18 @@ emit_function_wrappers()
 		std::unordered_set<int> writeback;
 		for (int i=0 ; i<args ; i++)
 		{
-			bool special = false;
-			std::stringstream ss;
-			ss << "arg" << i;
-			std::string argName = ss.str();
-			CXType argType = clang_getArgType(fnType, i);
-			cout << "\tduk_dup(ctx, -" << (args-i) << ");\n";
-			RAIICXString typeName = clang_getTypeSpelling(argType);
-			if (argType.kind == CXType_Pointer)
-			{
-				CXType pointee = clang_getPointeeType(argType);
-				RAIICXString str = clang_getTypeSpelling(pointee);
-				bool isConst = clang_isConstQualifiedType(pointee);
-				pointee = clang_getCanonicalType(pointee);
-				if (pointee.kind == CXType_Char_S ||
-				    pointee.kind == CXType_Void)
-				{
-					special = true;
-					cout << typeName << " arg" << i << ";\n";
-					get_if("string", "char*", argName);
-					cout << "\telse\n";
-					cast_from_js(argType, argName);
-				}
-				else if (pointee.kind == CXType_FunctionProto)
-				{
-					special = true;
-					success = false;
-					cerr << "Warning: Can't yet handle function pointer args\n";
-				}
-				else  if ((pointee.kind == CXType_Record) &&
-				          isCompleteRecordType(pointee))
-				{
-					special = true;
-					if (!isConst)
-					{
-						writeback.insert(i);
-						cout << "int writeback_" << argName << " = 0;\n";
-					}
-					RAIICXString pointeeName = clang_getTypeSpelling(pointee);
-					RAIICXString pointeeKind = clang_getTypeKindSpelling(pointee.kind);
-					cout << typeName << ' ' << argName << ";\n";
-					std::string bufName = argName + "_buf";
-					cout << pointeeName << ' ' << bufName << ";\n";
-					get_if("pointer", "void*", argName);
-					cout << "\telse\n\t{\n";
-					cast_from_js(pointee, bufName);
-					cout << argName << " = &" << bufName << ";\n";
-					if (!isConst)
-					{
-						cout << "writeback_" << argName << " = 1;\n";
-					}
-					cout << "\t}";
-				}
-			}
-			if (!special)
-			{
-				cout << typeName << " arg" << i << ";\n";
-				if (!cast_from_js(argType, argName))
-				{
-					success = false;
-					break;
-				}
-			}
-			cout << "\tduk_pop(ctx);\n";
-			// FIXME: Do something more sensible with pointer types
-			// FIXME: Some args may be in-out so flag that we need to copy them
-			// back...
+			success &= emit_function_argument(fnType, args, i, writeback);
 		}
 		if (success)
 		{
-			RAIICXString typeName = clang_getTypeSpelling(retTy);
-			if (retTy.kind != CXType_Void)
-			{
-				cout << typeName << " ret = ";
-			}
-			cout << name << '(';
-			for (int i=0 ; i<args ; i++)
-			{
-				// If we've created something that's a desugared type, emit a
-				// cast to the typedef type to silence compiler warnings.
-				RAIICXString argTy =
-					clang_getTypeSpelling(clang_getArgType(fnType, i));
-				cout << " arg" << i;
-				if (i<args-1)
-				{
-					cout << ", ";
-				}
-			}
-			cout << ");";
-			// After the call, we iterate over all of the values that we should
-			// be writing back.
-			for (auto i : writeback)
-			{
-				CXType argType = clang_getArgType(fnType, i);
-				CXType type =
-					clang_getCanonicalType(clang_getPointeeType(argType));
-				auto decl = clang_getTypeDeclaration(type);
-				std::stringstream ss;
-				ss << "arg" << i;
-				std::string argName = ss.str();
-				RAIICXString typeName = clang_getCursorSpelling(decl);
-				cout << "\tif (writeback_" << argName << ")\n\t{\n";
-				cout << "\tduk_dup(ctx, -" << (args-i) << ");\n";
-				cout << '\t';
-				cast_to_js_fn(cout, typeName);
-				cout << "(ctx, &(" << argName << "_buf), 0);\n";
-				cout << "\tduk_pop(ctx);\n\t}";
-			}
+			emit_function_call(fnType, retTy, args, name);
+			emit_function_arg_writeback(writeback, fnType, args);
+			// We don't need to bracket this in a check for void, because
+			// cast_to_js will not emit anything when a void value is passed.
 			success &= cast_to_js(retTy, "ret");
 		}
+		// Return undefined (0 return values) for a void function, one value
+		// for anything else.
 		if (retTy.kind == CXType_Void)
 		{
 			cout << "\treturn 0;\n";
@@ -702,6 +722,10 @@ emit_function_wrappers()
 			cout << "\treturn 1;\n";
 		}
 		cout << "}\n";
+		// If we've managed to successfully emit this function wrapper, then
+		// add it to the list to emit.  If anything went wrong, it's static and
+		// unused, so the compiler will discard it when compiling the generated
+		// wrappers.
 		if (success)
 		{
 			fns.push_back(std::make_tuple(name, cname, args));
@@ -714,6 +738,7 @@ emit_function_wrappers()
 		cout << "\t{ \"" << std::get<0>(entry) << "\", " << std::get<1>(entry)
 		     << ", " << std::get<2>(entry) << "},\n";
 	}
+	// Add the null terminator.
 	cout << "\t{ 0, 0, 0 }\n";
 	cout << "};\n";
 }

@@ -41,6 +41,8 @@
 using std::cout;
 using std::cerr;
 
+namespace {
+
 /**
  * Type for metadata about structs.  We collect the names and types of fields
  * for each struct.
@@ -59,15 +61,15 @@ typedef std::function<CXChildVisitResult(CXCursor, CXCursor)> Visitor;
 /**
  * Global collection of all of the structs that we've found.
  */
-static std::unordered_map<std::string, Struct> structs;
+std::unordered_map<std::string, Struct> structs;
 /**
  * Global collection of all of the function declarations that we've found.
  */
-static std::unordered_map<std::string, CXType> functions;
+std::unordered_map<std::string, CXType> functions;
 /**
  * Global collection of all of the enumerations that we've found.
  */
-static std::unordered_map<std::string, Enum> enums;
+std::unordered_map<std::string, Enum> enums;
 
 /**
  * RAIICXString wraps a CXString and handles automatic deallocation.
@@ -102,7 +104,7 @@ class RAIICXString
 };
 
 
-static CXChildVisitResult
+CXChildVisitResult
 visitChildrenTrampoline(CXCursor cursor,
                         CXCursor parent,
                         CXClientData client_data)
@@ -110,14 +112,14 @@ visitChildrenTrampoline(CXCursor cursor,
 	return (*reinterpret_cast<Visitor*>(client_data))(cursor, parent);
 }
 
-static unsigned
+unsigned
 visitChildren(CXCursor cursor, Visitor v)
 {
 	return clang_visitChildren(cursor, visitChildrenTrampoline,
 			(CXClientData*)&v);
 }
 
-static void
+void
 collectStruct(CXCursor structDecl)
 {
 	if (structDecl.kind == CXCursor_UnionDecl)
@@ -148,7 +150,7 @@ collectStruct(CXCursor structDecl)
 	});
 }
 
-static void
+void
 collectFunction(CXCursor functionDecl)
 {
 	RAIICXString name = clang_getCursorSpelling(functionDecl);
@@ -156,7 +158,7 @@ collectFunction(CXCursor functionDecl)
 	functions[name] = type;
 }
 
-static void
+void
 collectEnum(CXCursor enumDecl)
 {
 	RAIICXString name = clang_getCursorSpelling(enumDecl);
@@ -172,7 +174,7 @@ collectEnum(CXCursor enumDecl)
 
 }
 
-static enum CXChildVisitResult
+enum CXChildVisitResult
 visitTranslationUnit (CXCursor cursor, CXCursor parent, CXClientData unused)
 {
 	CXCursorKind kind = clang_getCursorKind(cursor);
@@ -216,7 +218,7 @@ void cast_from_js_fn(Stream &str, const std::string &name)
 	str << "js_function_" << name << "_from_js";
 }
 
-static bool
+bool
 cast_to_js(CXType type, const std::string &cname)
 {
 	bool ret = true;
@@ -298,7 +300,7 @@ cast_to_js(CXType type, const std::string &cname)
  * The `ifType` and `getType` parameters can differ, for example, if you wish
  * to check that the top value is a number and get it as an int or a double.
  */
-static void
+void
 get_if(const char *ifType, const char *getType, const char *cast, const
 		std::string cname)
 {
@@ -310,7 +312,7 @@ get_if(const char *ifType, const char *getType, const char *cast, const
 /**
  * Variant of `get_if` where `ifType` and `getType` are the same.
  */
-static void
+void
 get_if(const char *type, const char *cast, const std::string cname)
 {
 	return get_if(type, type, cast, cname);
@@ -402,7 +404,7 @@ cast_from_js(CXType type, const std::string &cname)
 /**
  * Returns true if the record type argument has some known fields.
  */
-static bool
+bool
 isCompleteRecordType(CXType type)
 {
 	assert(type.kind == CXType_Record);
@@ -701,6 +703,8 @@ emit_enum_wrappers()
 	}
 	cout << "\treturn 1;\n}\n";
 }
+
+} // anonymous namespace
 
 int
 main(int argc, char **argv)

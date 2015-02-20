@@ -395,16 +395,16 @@ cast_from_js(CXType type, const std::string &cname)
 			// construct one of those.
 			if (decl.kind == CXCursor_UnionDecl)
 			{
-					cout << "\tif (duk_is_buffer(ctx, -1))\n\t{\n"
-					        "\tduk_size_t size;\n"
-					        "\tvoid *buf = duk_get_buffer(ctx, -1, &size);\n"
-					        "\tsize = size < "
-					     << clang_Type_getSizeOf(type)
-					     << " ? size : "
-					     << clang_Type_getSizeOf(type)
-					     << ";\n\tmemcpy("
-					     << cname
-					     << ", buf, size);\n\t}\n";
+				cout << "\tif (duk_is_buffer(ctx, -1))\n\t{\n"
+				        "\tduk_size_t size;\n"
+				        "\tvoid *buf = duk_get_buffer(ctx, -1, &size);\n"
+				        "\tsize = size < "
+				     << clang_Type_getSizeOf(type)
+				     << " ? size : "
+				     << clang_Type_getSizeOf(type)
+				     << ";\n\tmemcpy("
+				     << cname
+				     << ", buf, size);\n\t}\n";
 				break;
 			}
 			// For struct types, call the function that we've already emitted

@@ -103,7 +103,10 @@ class RAIICXString
 	~RAIICXString() { clang_disposeString(cxstr); }
 };
 
-
+/**
+ * Trampoline used by visitChildren to call a `std::function` instead of a C
+ * function.
+ */
 CXChildVisitResult
 visitChildrenTrampoline(CXCursor cursor,
                         CXCursor parent,
@@ -112,6 +115,9 @@ visitChildrenTrampoline(CXCursor cursor,
 	return (*reinterpret_cast<Visitor*>(client_data))(cursor, parent);
 }
 
+/**
+ * `clang_visitChildren` wrapper that takes a `std::function`.
+ */
 unsigned
 visitChildren(CXCursor cursor, Visitor v)
 {
@@ -119,9 +125,14 @@ visitChildren(CXCursor cursor, Visitor v)
 			(CXClientData*)&v);
 }
 
+/**
+ * Collect struct definitions.
+ */
 void
 collectStruct(CXCursor structDecl)
 {
+	// Skip unions - we don't explicitly box them as objects, we just wrap them
+	// in a buffer.
 	if (structDecl.kind == CXCursor_UnionDecl)
 	{
 		return;
@@ -133,6 +144,7 @@ collectStruct(CXCursor structDecl)
 		return;
 	}
 	Struct &s = structs[structname];
+	// Once we've found a struct, recursively visit the fields and add them.
 	visitChildren(structDecl,
 		[&](CXCursor cursor, CXCursor parent)
 		{
@@ -141,6 +153,8 @@ collectStruct(CXCursor structDecl)
 			RAIICXString name = clang_getCursorSpelling(cursor);
 			CXType type = clang_getCanonicalType(clang_getCursorType(cursor));
 			RAIICXString type_name = clang_getTypeSpelling(type);
+			// FIXME: We currently don't handle anonymous structs inside other
+			// structs, which we should...
 			if (type.kind == CXType_Record)
 			{
 				collectStruct(clang_getTypeDeclaration(type));
@@ -150,6 +164,9 @@ collectStruct(CXCursor structDecl)
 	});
 }
 
+/**
+ * Collect function declarations.
+ */
 void
 collectFunction(CXCursor functionDecl)
 {
@@ -158,11 +175,15 @@ collectFunction(CXCursor functionDecl)
 	functions[name] = type;
 }
 
+/**
+ * Collect enum declarations.
+ */
 void
 collectEnum(CXCursor enumDecl)
 {
 	RAIICXString name = clang_getCursorSpelling(enumDecl);
 	Enum &e = enums[name];
+	// Recursively visit the children of the enum.
 	visitChildren(enumDecl,
 		[&](CXCursor cursor, CXCursor parent)
 		{
@@ -174,6 +195,10 @@ collectEnum(CXCursor enumDecl)
 
 }
 
+/**
+ * Top-level visit function.  Iterate over all top-level declarations and
+ * collect information about them.
+ */
 enum CXChildVisitResult
 visitTranslationUnit (CXCursor cursor, CXCursor parent, CXClientData unused)
 {
@@ -206,18 +231,31 @@ visitTranslationUnit (CXCursor cursor, CXCursor parent, CXClientData unused)
 	return CXChildVisit_Continue;
 }
 
+/**
+ * Helper that emits the name of the function used to convert from a C
+ * structure to JavaScript.
+ */
 template<class Stream>
 void cast_to_js_fn(Stream &str, const std::string &name)
 {
 	str << "js_function_" << name << "_to_js";
 }
 
+/**
+ * Helper that emits the name of the function used to convert to a C structure
+ * from JavaScript.
+ */
 template<class Stream>
 void cast_from_js_fn(Stream &str, const std::string &name)
 {
 	str << "js_function_" << name << "_from_js";
 }
 
+/**
+ * Emit code to convert the variable named by `cname` to JavaScript and store
+ * it on the top of the Duktape stack.  The type of the C variable is specified
+ * by `type`.
+ */
 bool
 cast_to_js(CXType type, const std::string &cname)
 {
@@ -252,7 +290,8 @@ cast_to_js(CXType type, const std::string &cname)
 				     << ");\n\t}";
 				break;
 			}
-			// If it's a struct, then construct an object that corresponds to it.
+			// If it's a struct, then construct an object that corresponds to
+			// it.
 			RAIICXString typeName = clang_getCursorSpelling(decl);
 			cout << '\t';
 			cast_to_js_fn(cout, typeName);
@@ -262,6 +301,8 @@ cast_to_js(CXType type, const std::string &cname)
 		}
 		case CXType_ConstantArray:
 		{
+			// For constant-sized arrays, construct an array that has the same
+			// elements.
 			CXType elementType = clang_getCanonicalType(clang_getElementType(type));
 			long long len = clang_getNumElements(type);
 			cout << "\t{\n\tduk_idx_t arr_idx = duk_push_array(ctx);\n";

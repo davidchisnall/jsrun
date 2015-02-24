@@ -271,8 +271,33 @@ cast_to_js(CXType type, const std::string &cname)
 		}
 		case CXType_Void:
 			break;
-		case CXType_Bool...CXType_LongLong:
+		case CXType_Bool:
+			cout << "\tduk_push_boolean(ctx, "<< cname << ");\n";
+			break;
+		// Unsigned types up to int, push as int
+		case CXType_Char_U:
+		case CXType_UChar:
+		case CXType_UShort:
+		case CXType_UInt:
+			cout << "\tduk_push_uint(ctx, "<< cname << ");\n";
+			break;
+		// Signed types up to int, push as int
+		case CXType_Char_S:
+		case CXType_Char16:
+		case CXType_Char32:
+		case CXType_SChar:
+		case CXType_WChar:
+		case CXType_Short:
+		case CXType_Int:
 			cout << "\tduk_push_int(ctx, "<< cname << ");\n";
+			break;
+		// Types bigger than an int, push as a double
+		case CXType_Long:
+		case CXType_LongLong:
+		case CXType_ULong:
+		case CXType_ULongLong:
+		case CXType_Float...CXType_LongDouble:
+			cout << "\tduk_push_number(ctx, (duk_double_t)"<< cname << ");\n";
 			break;
 		case CXType_Record:
 		{
@@ -319,9 +344,6 @@ cast_to_js(CXType type, const std::string &cname)
 			cout << "\t}\n\t}\n";
 			break;
 		}
-		case CXType_Float...CXType_LongDouble:
-			cout << "\tduk_push_number(ctx, (duk_double_t)"<< cname << ");\n";
-			break;
 		case CXType_Pointer:
 		{
 			RAIICXString ptrType = clang_getTypeSpelling(type);
@@ -378,10 +400,40 @@ cast_from_js(CXType type, const std::string &cname)
 		}
 		case CXType_Void:
 			break;
-		// If the target is an integer type, then try to fetch it as an int.
-		case CXType_Bool...CXType_LongLong:
-			get_if("number", "int", "long long", cname);
+		case CXType_Bool:
+		{
+			RAIICXString typeName = clang_getTypeSpelling(type);
+			get_if("boolean", "boolean", typeName, cname);
 			break;
+		}
+		// Unsigned types up to int, fetch as int
+		case CXType_Char_U:
+		case CXType_UChar:
+		case CXType_UShort:
+		case CXType_UInt:
+		{
+			RAIICXString typeName = clang_getTypeSpelling(type);
+			get_if("number", "uint", typeName, cname);
+			break;
+		}
+		// Signed types up to int, get as int
+		case CXType_Char_S:
+		case CXType_Char16:
+		case CXType_Char32:
+		case CXType_SChar:
+		case CXType_WChar:
+		case CXType_Short:
+		case CXType_Int:
+		{
+			RAIICXString typeName = clang_getTypeSpelling(type);
+			get_if("number", "int", typeName, cname);
+			break;
+		}
+		// Types bigger than an int, get as a double
+		case CXType_Long:
+		case CXType_LongLong:
+		case CXType_ULong:
+		case CXType_ULongLong:
 		// If we want a floating point value, try to get it as a float.
 		case CXType_Float...CXType_LongDouble:
 			get_if("number", "double", cname);

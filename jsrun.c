@@ -281,7 +281,7 @@ int main(int argc, char *argv[])
 	duk_push_array(ctx);
 	for (int i = 1; i < argc; i++)
 	{
-		duk_push_int(ctx, i);
+		duk_push_int(ctx, i-1);
 		duk_push_string(ctx, argv[i]);
 		duk_put_prop(ctx, -3);
 	}

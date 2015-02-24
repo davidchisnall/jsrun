@@ -1,5 +1,5 @@
 
-OBJECTS=duktape.o jsrun.o modules.o
+OBJECTS=duktape.o jsrun.o modules.o env.o
 
 all: ffigen jsrun
 

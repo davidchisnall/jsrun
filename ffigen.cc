@@ -402,9 +402,9 @@ cast_from_js(CXType type, const std::string &cname)
 				     << clang_Type_getSizeOf(type)
 				     << " ? size : "
 				     << clang_Type_getSizeOf(type)
-				     << ";\n\tmemcpy("
+				     << ";\n\tmemcpy(&("
 				     << cname
-				     << ", buf, size);\n\t}\n";
+				     << "), buf, size);\n\t}\n";
 				break;
 			}
 			// For struct types, call the function that we've already emitted

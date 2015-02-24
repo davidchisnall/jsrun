@@ -1,5 +1,8 @@
 #include "duktape.h"
 
+/**
+ * Initialise the objects required for module loading to work.
+ */
 void init_modules(duk_context *ctx);
 /**
  * Initialise the objects required for workers.
@@ -20,6 +23,9 @@ void run_message_loop(duk_context *ctx);
  */
 int handle_file(duk_context *ctx, const char *filename);
 
+/**
+ * Initialise all of the default objects provided by this environment.
+ */
 static inline void init_default_objects(duk_context *ctx)
 {
 	init_env(ctx);

@@ -304,6 +304,7 @@ int main(int argc, char *argv[])
 		else if (handle_file(ctx, arg) == 0)
 		{
 			interactive = false;
+			run_message_loop(ctx);
 		}
 		else
 		{

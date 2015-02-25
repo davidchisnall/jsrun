@@ -607,7 +607,15 @@ emit_function_argument(CXType fnType, int args, int i, T &writeback)
 	CXType argType = clang_getArgType(fnType, i);
 	cout << "\tduk_dup(ctx, -" << (args-i) << ");\n";
 	RAIICXString typeName = clang_getTypeSpelling(argType);
-	if (argType.kind == CXType_Pointer)
+	// FIXME: We should handle block args by emitting a block that wraps a
+	// JavaScript function.
+	if (argType.kind == CXType_BlockPointer)
+	{
+		special = true;
+		success = false;
+		cerr << "Warning: Can't yet handle block pointer args\n";
+	}
+	else if (argType.kind == CXType_Pointer)
 	{
 		CXType pointee = clang_getPointeeType(argType);
 		RAIICXString str = clang_getTypeSpelling(pointee);

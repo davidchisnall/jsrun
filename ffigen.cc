@@ -771,9 +771,28 @@ emit_function_wrappers()
 		{
 			emit_function_call(fnType, retTy, args, name);
 			emit_function_arg_writeback(writeback, fnType, args);
-			// We don't need to bracket this in a check for void, because
-			// cast_to_js will not emit anything when a void value is passed.
-			success &= cast_to_js(retTy, "ret");
+			if (retTy.kind == CXType_Pointer)
+			{
+				CXType pointee = clang_getPointeeType(retTy);
+				pointee = clang_getCanonicalType(pointee);
+				if ((pointee.kind == CXType_Record) &&
+				    isCompleteRecordType(pointee))
+				{
+					cout << "\tif (ret != 0)\n\t{\n\t";
+					success &= cast_to_js(pointee, "(*ret)");
+					cout << "} else {\n\t\tduk_push_null(ctx);\n\t}";
+				}
+				else
+				{
+					success &= cast_to_js(retTy, "ret");
+				}
+			}
+			else
+			{
+				// We don't need to bracket this in a check for void, because
+				// cast_to_js will not emit anything when a void value is passed.
+				success &= cast_to_js(retTy, "ret");
+			}
 		}
 		// Return undefined (0 return values) for a void function, one value
 		// for anything else.

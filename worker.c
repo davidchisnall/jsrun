@@ -370,22 +370,23 @@ try_to_collect_workers(struct port *p, duk_context *ctx)
 			duk_push_heapptr(ctx, ptr);
 			duk_put_prop(ctx, -3);
 		}
+		else if (duk_is_object(ctx, -1))
+		{
+			LOG("[%d] Didn't try to collect worker %p, saving as %d\n", i,
+					duk_get_heapptr(ctx, -1), i);
+			duk_put_prop_index(ctx, -2, insert_ptr++);
+		}
 		else
 		{
-			if (duk_is_object(ctx, -1))
-			{
-				LOG("Didn't try to collect worker %p\n", duk_get_heapptr(ctx, -1));
-				insert_ptr++;
-			}
 			duk_pop(ctx); // Worker
 		}
 	}
 	// Resize the array
-	duk_push_int(ctx, insert_ptr+1);
+	duk_push_int(ctx, insert_ptr);
 	duk_put_prop_string(ctx, -2, "length");
 	duk_pop(ctx); // array
 	duk_pop(ctx); // global stash 
-	LOG("Collected threads for context %p, all waiting? %d (%d left)\n", ctx, all_waiting, insert_ptr+1);
+	LOG("Collected threads for context %p, all waiting? %d (%d left)\n", ctx, all_waiting, insert_ptr);
 	return all_waiting;
 }
 

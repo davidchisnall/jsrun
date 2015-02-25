@@ -24,8 +24,11 @@
 
 #include <sys/stat.h>
 #include <dlfcn.h>
+#include <pthread.h>
 
 #include "jsrun.h"
+
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 typedef duk_ret_t(*initfn)(duk_context*);
 
@@ -60,12 +63,15 @@ static duk_ret_t load_native_module(duk_context *ctx) {
 		return DUK_RET_TYPE_ERROR;
 	}
 	const char *file = duk_get_string(ctx, -1);
+	pthread_mutex_lock(&lock);
 	void *lib = dlopen(file, RTLD_LOCAL);
 	if (!lib)
 	{
+		pthread_mutex_unlock(&lock);
 		return 0;
 	}
 	initfn init = (initfn)dlsym(lib, "dukopen_module");
+	pthread_mutex_unlock(&lock);
 	if (init)
 	{
 		return init(ctx);

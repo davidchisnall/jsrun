@@ -138,6 +138,10 @@ collectStruct(CXCursor structDecl)
 		return;
 	}
 	RAIICXString structname = clang_getCursorSpelling(structDecl);
+	if (structname.str() == "")
+	{
+		return;
+	}
 	// If we've already parsed this struct, return early.
 	if (structs.find(structname) != structs.end())
 	{

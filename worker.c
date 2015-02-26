@@ -247,6 +247,7 @@ send_message(struct port *p, struct message *m)
 {
 	assert(p);
 	m->next = NULL;
+	LOG("Sending %s on %p\n", m->contents, p);
 	LOCK_FOR_SCOPE(p->lock);
 	if (p->terminated || p->disconnected)
 	{
@@ -311,6 +312,7 @@ try_to_collect_workers(struct port *p, duk_context *ctx)
 		assert(top == duk_get_top(ctx));
 		duk_push_int(ctx, i);
 		duk_get_prop(ctx, -2);
+		LOG("[%d] %p\n", i, duk_get_heapptr(ctx, -1));
 		if (duk_is_object(ctx, -1))
 		{
 			duk_get_prop_string(ctx, -1, "\xFF" "worker_struct");
@@ -321,7 +323,10 @@ try_to_collect_workers(struct port *p, duk_context *ctx)
 				duk_pop(ctx); // Worker
 				continue;
 			}
-			LOG("Inspecting worker %p (%d)\n", w->object, w->receive_port->waiting);
+			LOG("[%d] Inspecting worker %p (%d)\n", i, w->object, w->receive_port->waiting);
+			assert(!w->receive_port->waiting ||
+			       (w->receive_port->waiting &&
+			        (w->receive_port->message_head == NULL)));
 			// We don't need to lock the receive port, because only the parent
 			// (i.e. us) is allowed to move the worker from a waiting to a
 			// non-waiting state.  Thia also avoids the thread deadlocking with
@@ -331,7 +336,7 @@ try_to_collect_workers(struct port *p, duk_context *ctx)
 			if (w->receive_port->waiting || w->receive_port->disconnected)
 			{
 				void *ptr = duk_get_heapptr(ctx, -1);
-				LOG("Trying to collect worker %p (waiting: %d)\n", ptr, w->receive_port->waiting);
+				LOG("[%d] Trying to collect worker %p (waiting: %d)\n", i, ptr, w->receive_port->waiting);
 				duk_pop(ctx); // Worker as object
 				duk_push_int(ctx, i);
 				duk_push_pointer(ctx, ptr); // Worker as non-GC'd pointer
@@ -340,7 +345,7 @@ try_to_collect_workers(struct port *p, duk_context *ctx)
 			else
 			{
 				duk_pop(ctx); // Worker
-				LOG("Worker %p (port %p) is not waiting\n", w->object, w->receive_port);
+				LOG("[%d] Worker %p (port %p) is not waiting\n", i, w->object, w->receive_port);
 				all_waiting = false;
 			}
 		}
@@ -364,7 +369,8 @@ try_to_collect_workers(struct port *p, duk_context *ctx)
 		if (duk_is_pointer(ctx, -1))
 		{
 			void *ptr = duk_get_pointer(ctx, -1);
-			LOG("Failed to collect worker %p\n", ptr);
+			LOG("[%d] Failed to collect worker %p, saving as %d\n", i, ptr,
+					insert_ptr);
 			duk_pop(ctx); // Worker
 			duk_push_int(ctx, insert_ptr);
 			duk_push_heapptr(ctx, ptr);
@@ -453,9 +459,12 @@ get_message(struct port *p,
 	}
 	if (p->message_head == NULL)
 	{
-		LOG("Exiting with no messages\n");
+		LOG("Exiting with no messages for port %p\n", p);
 		return false;
 	}
+	// We should not be able to wake up in a non-waiting state - anything that
+	// sends us messages should have cleared our waiting flag.
+	assert(p->waiting == false);
 	*m = p->message_head;
 	p->message_head = (*m)->next;
 	(*m)->next = NULL;
@@ -719,6 +728,7 @@ post_message_method(duk_context *ctx)
 	struct message *m = malloc(sizeof(struct message));
 	m->contents = strdup(json);
 	m->receiver = NULL;
+	LOG("Sending message from worker object %p to worker thread %p\n", w->object, w);
 	// FIXME: handle termination
 	send_message(p, m);
 	return 0;
@@ -840,7 +850,7 @@ finalise_worker(duk_context *ctx)
 	duk_pop(ctx); // index
 	// Disclaim our reference to the receiving port.  This will cause the
 	// worker thread to clean up the port.
-	LOG("Destroying's receive port ref %p\n", w->receive_port);
+	LOG("Destroying worker's receive port ref %p\n", w->receive_port);
 	assert(w->receive_port->waiting || w->receive_port->disconnected);
 	LOCK_FOR_SCOPE(w->receive_port->lock);
 	release_sending_port(w->receive_port);

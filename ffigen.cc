@@ -875,6 +875,8 @@ main(int argc, char **argv)
 	}
 	clang_visitChildren(clang_getTranslationUnitCursor(translationUnit),
 			visitTranslationUnit, 0);
+	cout << "#include <duktape.h>\n";
+	cout << "#include \"" << argv[1] << "\"\n";
 	// Emit all of the wrapers
 	emit_struct_wrappers();
 	emit_function_wrappers();

@@ -1,4 +1,4 @@
-var clib = require("test");
+var clib = require("libc_js");
 var jslib = require("tests");
 
 jslib.test("foo");

@@ -585,31 +585,34 @@ run_message_loop(duk_context *ctx)
 			if (m->receiver == NULL)
 			{
 				duk_push_global_object(ctx);
-				if (prepare_onmessage(ctx))
-				{
-					decode_string(ctx, m->contents);
-					duk_call(ctx, 1);
-					// We don't care about the return value.
-					duk_pop(ctx);
-				}
-				duk_pop(ctx); // global object
 			}
 			else
 			{
 				// Push the worker
 				duk_push_heapptr(ctx, m->receiver);
-				LOG("Received message '%s' for worker %p\n", m->contents, m->receiver);
-				if (prepare_onmessage(ctx))
+			}
+			if (prepare_onmessage(ctx))
+			{
+				// Swap the method / this order on the stack.  For the call,
+				// the order should be method, object, args
+				duk_swap_top(ctx, -2);
+				decode_string(ctx, m->contents);
+				assert(duk_is_object_coercible(ctx, -1));
+				assert(duk_is_object(ctx, -2));
+				assert(duk_is_callable(ctx, -3));
+				if (duk_pcall_method(ctx, 1) != DUK_EXEC_SUCCESS)
 				{
-					// Push the `this` object.
-					duk_dup(ctx, -2);
-					// Push the argument
-					decode_string(ctx, m->contents);
-					// Call the method and ignore the return
-					duk_call_method(ctx, 1);
+					print_error(ctx, stderr);
+				}
+				else
+				{
+					// We don't care about the return or error value.
 					duk_pop(ctx);
 				}
-				duk_pop(ctx); // Worker object
+			}
+			else 
+			{
+				duk_pop(ctx); // Worker / global object
 			}
 			assert(top == duk_get_top(ctx));
 			free_message(m);

@@ -860,7 +860,7 @@ main(int argc, char **argv)
 {
 	if (argc < 2)
 	{
-		cerr << "Usage: " << argv[0] << "{header} [compiler flags]\n";
+		cerr << "Usage: " << argv[0] << "{source file} [compiler flags]\n";
 		return EXIT_FAILURE;
 	}
 	// Construct the libclang context and try to parse the file.

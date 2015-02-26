@@ -366,14 +366,18 @@ try_to_collect_workers(struct port *p, duk_context *ctx)
 			void *ptr = duk_get_pointer(ctx, -1);
 			LOG("Failed to collect worker %p\n", ptr);
 			duk_pop(ctx); // Worker
-			duk_push_int(ctx, insert_ptr++);
+			duk_push_int(ctx, insert_ptr);
 			duk_push_heapptr(ctx, ptr);
+			duk_push_int(ctx, insert_ptr++);
+			duk_put_prop_string(ctx, -2, "\xFF" "index");
 			duk_put_prop(ctx, -3);
 		}
 		else if (duk_is_object(ctx, -1))
 		{
 			LOG("[%d] Didn't try to collect worker %p, saving as %d\n", i,
 					duk_get_heapptr(ctx, -1), i);
+			duk_push_int(ctx, insert_ptr);
+			duk_put_prop_string(ctx, -2, "\xFF" "index");
 			duk_put_prop_index(ctx, -2, insert_ptr++);
 		}
 		else

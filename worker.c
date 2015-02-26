@@ -543,11 +543,13 @@ prepare_onmessage(duk_context *ctx)
 	// Get the onmessage function and stick it on the top of the stack
 	if (duk_get_prop_string(ctx, -1, "onMessage") != 1)
 	{
+		LOG("Failed to find onMessage property in object\n");
 		return false;
 	}
 	// If the onmessage variable is not a function then return it.
 	if (!duk_is_function(ctx, -1))
 	{
+		LOG("onMessage property is not a function\n");
 		duk_pop(ctx);
 		return false;
 	}

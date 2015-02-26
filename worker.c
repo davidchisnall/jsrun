@@ -655,16 +655,6 @@ post_message_global(duk_context *ctx)
 }
 
 static duk_ret_t
-compile_execute(duk_context *ctx)
-{
-	duk_compile(ctx, 0);
-	duk_push_global_object(ctx);  /* 'this' binding */
-	duk_call_method(ctx, 0);
-	duk_pop(ctx); // result
-	return 1;
-}
-
-static duk_ret_t
 get_closing(duk_context *ctx)
 {
 	LOG("Closing called\n");

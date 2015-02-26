@@ -102,12 +102,12 @@ handle_fh(duk_context *ctx, FILE *f, const char *filename) {
 	{
 		goto error;
 	}
-	len = (int) ftell(f);
+	len = ftell(f);
 	if (fseek(f, 0, SEEK_SET) < 0)
 	{
 		goto error;
 	}
-	buf = (char *) malloc(len);
+	buf = malloc(len);
 	if (!buf)
 	{
 		goto error;

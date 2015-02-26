@@ -22,6 +22,11 @@ void run_message_loop(duk_context *ctx);
  * success, non-zero on failure.
  */
 int handle_file(duk_context *ctx, const char *filename);
+/**
+ * Print an error (including backtrace) to the specified file and pop it from
+ * the stack.
+ */
+void print_error(duk_context *ctx, FILE *f);
 
 /**
  * Initialise all of the default objects provided by this environment.

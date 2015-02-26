@@ -60,7 +60,9 @@ static int get_stack_raw(duk_context *ctx) {
 }
 
 /* Print error to stderr and pop error. */
-static void print_error(duk_context *ctx, FILE *f) {
+void
+print_error(duk_context *ctx, FILE *f)
+{
 	/* Print error objects with a stack trace specially.
 	 * Note that getting the stack trace may throw an error
 	 * so this also needs to be safe call wrapped.
@@ -71,7 +73,8 @@ static void print_error(duk_context *ctx, FILE *f) {
 	duk_pop(ctx);
 }
 
-int wrapped_compile_execute(duk_context *ctx) {
+static int
+wrapped_compile_execute(duk_context *ctx) {
 	int comp_flags;
 
 	comp_flags = 0;
@@ -171,7 +174,8 @@ handle_file(duk_context *ctx, const char *filename)
 	return retval;
 }
 
-int handle_interactive(duk_context *ctx) {
+static int
+handle_interactive(duk_context *ctx) {
 	const char *prompt = "javascript> ";
 	char *buffer;
 	int retval = 0;
@@ -224,7 +228,7 @@ int handle_interactive(duk_context *ctx) {
 	return retval;
 }
 
-void
+static void
 usage(void)
 {
 	fprintf(stderr, "Usage: duk [-i] [-l {bytes} ] [<filenames>]\n"

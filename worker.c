@@ -513,7 +513,7 @@ decode_string(duk_context *ctx, const char *str)
 	duk_json_decode(ctx, -1);
 }
 
-struct port *
+static struct port *
 get_thread_port(duk_context *ctx)
 {
 	struct port *p;

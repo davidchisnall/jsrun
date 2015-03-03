@@ -13,6 +13,10 @@ void init_workers(duk_context *ctx);
  */
 void init_env(duk_context *ctx);
 /**
+ * Initialize TypedArray support.
+ */
+void init_typed_array(duk_context *ctx);
+/**
  * Keep the context running for as long as it has a receive port with pending
  * messages.
  */
@@ -36,4 +40,5 @@ static inline void init_default_objects(duk_context *ctx)
 	init_env(ctx);
 	init_modules(ctx);
 	init_workers(ctx);
+	init_typed_array(ctx);
 }

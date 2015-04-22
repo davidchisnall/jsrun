@@ -192,7 +192,7 @@ handle_interactive(duk_context *ctx) {
 	for (;;)
 	{
 		buffer = readline(prompt);
-		if (buffer != NULL)
+		if (buffer == NULL)
 		{
 			break;
 		}

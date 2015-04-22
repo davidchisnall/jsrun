@@ -214,6 +214,18 @@ typed_array_handler_##name##_set(duk_context *ctx)                            \
 static duk_ret_t                                                              \
 typed_array_##name##_constructor(duk_context *ctx)                            \
 {                                                                             \
+	if (duk_is_number(ctx, 0))                                                \
+	{                                                                         \
+		duk_push_global_object(ctx);                                          \
+		duk_get_prop_string(ctx, -1, "ArrayBuffer");                          \
+		duk_uint_t size = duk_get_uint(ctx, 0);                               \
+		duk_push_uint(ctx, size * sizeof(type));                              \
+		duk_new(ctx, 1);                                                      \
+		duk_swap_top(ctx, 0);                                                 \
+		duk_pop_2(ctx);                                                       \
+		/* At this point, we've replaced the length with a buffer */          \
+		assert(duk_get_top(ctx) == 1);                                        \
+	}                                                                         \
 	duk_get_prop_string(ctx, 0, "constructor");                               \
 	if (duk_is_c_function(ctx, -1))                                           \
 	{                                                                         \
@@ -351,6 +363,58 @@ dataview_set_##name##_method(duk_context *ctx)                                 \
 // negative offset that is still within the bounds of the buffer.
 
 #include "arraykinds.inc"
+
+void *
+duk_typed_array_buffer_get(duk_context *ctx, duk_size_t *size)
+{
+	// If this is a raw buffer, then just return its contents.
+	if (duk_is_buffer(ctx, -1))
+	{
+		return duk_get_buffer(ctx, -1, size);
+	}
+	// If it's an objects, then see if it is something that wraps a buffer
+	if (duk_is_object(ctx, -1))
+	{
+		duk_get_prop_string(ctx, 0, "constructor");
+		if (!duk_is_c_function(ctx, -1))
+		{
+			duk_pop(ctx); // constructor
+			return NULL;
+		}
+		duk_c_function constructor = duk_get_c_function(ctx, -1);
+		if (constructor == array_buffer_constructor)
+		{
+			duk_get_prop_string(ctx, -3, "\xFF" "buffer");
+			void *ptr = duk_get_buffer(ctx, -1, size);
+			duk_pop_3(ctx);
+			return ptr;
+		}
+		else
+		{
+			// If it's not an array buffer, then see if it's something that
+			// contains an array buffer as a buffer property.
+			duk_get_prop_string(ctx, -1, "buffer");
+			void *ptr = duk_typed_array_buffer_get(ctx, size);
+			duk_pop_2(ctx); // constructor, array buffer
+			return ptr;
+		}
+	}
+	return NULL;
+}
+
+void *
+duk_push_array_buffer(duk_context *ctx, duk_size_t size)
+{
+	duk_push_global_object(ctx);
+	duk_get_prop_string(ctx, -1, "ArrayBuffer");
+	duk_push_uint(ctx, size);
+	duk_new(ctx, 1);
+	duk_get_prop_string(ctx, -1, "\xFF" "buffer");
+	void *ptr = duk_get_buffer(ctx, -1, NULL);
+	duk_pop(ctx); // internal buffer
+	duk_remove(ctx, -2);
+	return ptr;
+}
 
 void
 init_typed_array(duk_context *ctx)

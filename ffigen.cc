@@ -255,6 +255,70 @@ void cast_from_js_fn(Stream &str, const std::string &name)
 	str << "js_function_" << name << "_from_js";
 }
 
+const char *
+typed_array_element_type(CXType ty)
+{
+	switch (ty.kind)
+	{
+		default:
+			return nullptr;
+		case CXType_Char_U:
+		case CXType_UChar:
+			return "UInt8";
+		case CXType_UShort:
+			return "UInt16";
+		case CXType_UInt:
+			return "UInt32";
+		case CXType_Char_S:
+		case CXType_SChar:
+			return "Int8";
+		case CXType_Short:
+		case CXType_WChar:
+		case CXType_Char16:
+			return "Int16";
+		case CXType_Int:
+		case CXType_Char32:
+			return "Int32";
+		// On ILP32, we can handle long in JavaScript typed arrays.  In LP64,
+		// we can't.
+		case CXType_Long:
+			return sizeof(long) == 4 ? "Int32" : nullptr;
+		case CXType_ULong:
+			return sizeof(unsigned long) == 4 ? "UInt32" : nullptr;
+		case CXType_Float:
+			static_assert(sizeof(float) == 4, "Unsupported target!");
+			return "Float32";
+		case CXType_Double:
+			static_assert(sizeof(double) == 8, "Unsupported target!");
+			return "Float64";
+	}
+}
+
+/**
+ * Emit the code to construct a new TypedArray object and copy the data from a
+ * pointer to it.
+ */
+void
+create_typed_array(const char *js_type,
+                   const std::string &cname,
+                   size_t len,
+                   size_t size)
+{
+	cout << "\tduk_push_global_object(ctx);\n";
+	cout << "\tduk_get_prop_string(ctx, -1, \"" << js_type << "Array\");\n";
+	cout << "\tduk_remove(ctx, -2);\n";
+	cout << "\tduk_push_uint(ctx, " << len << ");\n";
+	cout << "\tduk_new(ctx, 1);\n";
+	cout << "\tduk_get_prop_string(ctx, -1, \"buffer\");\n";
+	cout << "\tduk_get_prop_string(ctx, -1, \"\\xFF\" \"buffer\");\n";
+	cout << "\t{\n\t\tsize_t size;\n";
+	cout << "\t\tvoid *buffer = duk_get_buffer(ctx, -1, &size);\n";
+	cout << "\t\tassert(size == " << size << ");\n";
+	cout << "\t\tmemcpy(buffer, " << cname << ", " << size << ");\n\t}\n";
+	cout << "\tduk_pop(ctx);\n"; //Duktape.Buffer 
+	cout << "\tduk_pop(ctx);\n"; //ArrayBuffer 
+}
+
 /**
  * Emit code to convert the variable named by `cname` to JavaScript and store
  * it on the top of the Duktape stack.  The type of the C variable is specified
@@ -310,7 +374,7 @@ cast_to_js(CXType type, const std::string &cname)
 			{
 				// If it's a union then just construct a buffer and put the
 				// data there.
-				cout << "\t{\n\t\tvoid *buf = duk_push_fixed_buffer(ctx, "
+				cout << "\t{\n\t\tvoid *buf = duk_push_array_buffer(ctx, "
 				     << clang_Type_getSizeOf(type)
 				     << ");\n\t\tmemcpy(buf, &("
 				     << cname
@@ -334,6 +398,14 @@ cast_to_js(CXType type, const std::string &cname)
 			// elements.
 			CXType elementType = clang_getCanonicalType(clang_getElementType(type));
 			long long len = clang_getNumElements(type);
+			// If this is a type that we can stick in a constant array, then
+			// construct the relevant typed array class
+			if (auto *js_type = typed_array_element_type(elementType))
+			{
+				size_t size = len * clang_Type_getSizeOf(elementType);
+				create_typed_array(js_type, cname, len, size);
+				break;
+			}
 			cout << "\t{\n\tduk_idx_t arr_idx = duk_push_array(ctx);\n";
 			cout << "\tfor (int i=0 ; i<" << len << " ; i++)\n\t{\n";
 			std::string elName = std::string("(") + cname + ")[i]";
@@ -876,7 +948,14 @@ main(int argc, char **argv)
 	clang_visitChildren(clang_getTranslationUnitCursor(translationUnit),
 			visitTranslationUnit, 0);
 	cout << "#include <duktape.h>\n";
+	cout << "#include <assert.h>\n";
 	cout << "#include \"" << argv[1] << "\"\n";
+	// Stick in the prototype for this ourself for now.  We should probably
+	// have a duk_ffi.h or similar that included the relevant functions from
+	// the duktape API plus our extensions.
+	cout << "void *duk_typed_array_buffer_get(duk_context *, duk_size_t *);\n";
+	cout << "void *duk_push_array_buffer(duk_context *, duk_size_t );\n";
+
 	// Emit all of the wrapers
 	emit_struct_wrappers();
 	emit_function_wrappers();

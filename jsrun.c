@@ -189,10 +189,12 @@ handle_interactive(duk_context *ctx) {
 
 	rl_initialize();
 
-	for (;;)
+	for (int i=0 ;; i++)
 	{
-		buffer = readline(prompt);
-		if (buffer == NULL)
+		char *file;
+		asprintf(&file, "[%d] %s", i, prompt);
+		buffer = readline(file);
+		if (buffer == NULL && buffer[0] == 0)
 		{
 			break;
 		}
@@ -203,13 +205,11 @@ handle_interactive(duk_context *ctx) {
 		}
 
 		duk_push_string(ctx, buffer);
-		// The file name for the executing context
-		// TODO: We could make stack traces more readable by adding a counter
-		// in each input and setting that name here.
-		duk_push_string(ctx, "input");
-
 		free(buffer);
 		buffer = NULL;
+		// The file name for the executing context
+		duk_push_string(ctx, file);
+		free(file);
 
 		interactive_mode = true;  /* global */
 

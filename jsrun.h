@@ -40,5 +40,4 @@ static inline void init_default_objects(duk_context *ctx)
 	init_env(ctx);
 	init_modules(ctx);
 	init_workers(ctx);
-	init_typed_array(ctx);
 }
